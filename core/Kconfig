@@ -110,10 +110,9 @@ config WITH_USER_TA
 config BUILD_IN_TREE_TA
 	bool "Build in-tree TAs"
 	default y
-	depends on WITH_USER_TA
 	help
 	  Build the Trusted Applications that are part of this source tree
-	  (e.g. pkcs11 TA, avb TA).  Requires WITH_USER_TA.
+	  (e.g. pkcs11 TA, avb TA).
 
 endmenu # Trusted Applications
 

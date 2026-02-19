@@ -76,6 +76,147 @@ endif
 
 SCRIPTS_DIR := scripts
 
+# ---------------------------------------------------------------------------
+# Kconfig integration
+# ---------------------------------------------------------------------------
+KCONFIG_KCONFIG    := $(CURDIR)/Kconfig
+KCONFIG_CONFIG     := $(abspath $(out-dir))/.config
+KCONFIG_AUTOCONFIG := $(abspath $(out-dir))/include/config/auto.conf
+KCONFIG_AUTOHEADER := $(abspath $(out-dir))/include/generated/autoconf.h
+
+# Compute the defconfig path immediately (`:=`) so that the conf.mk default
+# for PLATFORM_FLAVOR (e.g. "qemu_virt") is not picked up when the user only
+# specifies PLATFORM=vexpress.  At this point PLATFORM_FLAVOR is only set if
+# the user passed it explicitly (directly or via "PLATFORM=foo-bar" parsing).
+_defconfig-plat    := $(PLATFORM)$(if $(PLATFORM_FLAVOR),-$(PLATFORM_FLAVOR),)
+KCONFIG_DEFCONFIG  ?= core/arch/$(ARCH)/configs/$(_defconfig-plat)_defconfig
+
+# Make fragment derived from .config: one "CFG_FOO ?= n" line per disabled
+# symbol.  Including it injects the symbols into $(.VARIABLES) so that
+# cfg-vars-by-prefix / cfg-make-define can emit the correct
+# "/* CFG_FOO is not set */" entries in conf.h, matching the plain-Make
+# behaviour where mk/config.mk had an explicit "CFG_FOO ?= n" default.
+KCONFIG_NOTSET_MK  := $(abspath $(out-dir))/include/config/not-set.mk
+
+# The kconfig tools (conf, mconf) use the CONFIG_ environment variable as the
+# prefix for generated symbols.  By setting it to "CFG_" the generated
+# .config, auto.conf and autoconf.h all use the existing CFG_* naming
+# convention, keeping full backward compatibility with the rest of the tree.
+export CONFIG_          := CFG_
+export KCONFIG_CONFIG
+export KCONFIG_AUTOCONFIG
+export KCONFIG_AUTOHEADER
+export srctree          := $(CURDIR)
+export KCONFIG_DEFCONFIG
+
+kconfig-src-dir   := $(CURDIR)/scripts/kconfig
+kconfig-build-dir := $(abspath $(out-dir))/scripts/kconfig
+kconfig-conf      := $(kconfig-build-dir)/conf
+kconfig-mconf     := $(kconfig-build-dir)/mconf
+kconfig-nconf     := $(kconfig-build-dir)/nconf
+
+# Targets that can run without a .config
+no-dot-config-targets := clean cscope checkpatch checkpatch-staging \
+                         checkpatch-working mem_usage
+
+config-build :=
+need-config  := 1
+
+ifneq ($(filter $(no-dot-config-targets), $(MAKECMDGOALS)),)
+ifeq ($(filter-out $(no-dot-config-targets), $(MAKECMDGOALS)),)
+need-config :=
+endif
+endif
+
+ifneq ($(filter config %config, $(MAKECMDGOALS)),)
+config-build := 1
+endif
+
+# Build kconfig host tools on demand (used by both config and build targets).
+# Build them in $(kconfig-build-dir) so no artifacts land in the source tree.
+$(kconfig-conf) $(kconfig-mconf) $(kconfig-nconf): FORCE
+	$(q)mkdir -p $(kconfig-build-dir)
+	$(q)$(MAKE) -C $(kconfig-build-dir) -f $(kconfig-src-dir)/Makefile \
+		$(notdir $@)
+
+ifdef config-build
+# ---------------------------------------------------------------------------
+# *config targets
+# ---------------------------------------------------------------------------
+.PHONY: config menuconfig nconfig oldconfig olddefconfig syncconfig \
+        allnoconfig allyesconfig alldefconfig randconfig defconfig \
+        savedefconfig listnewconfig
+
+# All *config targets run from $(out-dir) so that the CWD-relative paths
+# hard-coded in confdata.c land under the output tree, not the source tree:
+#   include/config/auto.conf.cmd   (conf_write_dep)
+#   include/config/<SYM>           (conf_touch_dep stamp files)
+#   .tmpconfig / .tmpconfig.h      (renamed to auto.conf / autoconf.h)
+# $(1) = kconfig binary  $(2) = flag(s) + trailing Kconfig file path
+define kconfig-run
+	$(q)mkdir -p $(out-dir)/include/config
+	$(q)cd $(out-dir) && $(1) $(2)
+endef
+
+# Targets whose conf --<flag> matches the target name exactly.
+oldconfig olddefconfig syncconfig allnoconfig allyesconfig alldefconfig \
+randconfig listnewconfig: $(kconfig-conf)
+	$(call kconfig-run,$(kconfig-conf),--$@ $(KCONFIG_KCONFIG))
+
+# Interactive front-ends: line-oriented (conf), ncurses (mconf), TUI (nconf).
+config: $(kconfig-conf)
+	$(call kconfig-run,$(kconfig-conf),$(KCONFIG_KCONFIG))
+
+menuconfig: $(kconfig-mconf)
+	$(call kconfig-run,$(kconfig-mconf),$(KCONFIG_KCONFIG))
+
+nconfig: $(kconfig-nconf)
+	$(call kconfig-run,$(kconfig-nconf),$(KCONFIG_KCONFIG))
+
+defconfig: $(kconfig-conf)
+	$(call kconfig-run,$(kconfig-conf),--defconfig=$(abspath $(KCONFIG_DEFCONFIG)) $(KCONFIG_KCONFIG))
+
+# savedefconfig only writes the defconfig file; confdata.c is not called,
+# so no cd or include/config setup is required.
+savedefconfig: $(kconfig-conf)
+	$(q)mkdir -p $(dir $(KCONFIG_CONFIG))
+	$(q)$(kconfig-conf) --savedefconfig=$(abspath $(KCONFIG_DEFCONFIG)) \
+		$(KCONFIG_KCONFIG)
+
+else  # !config-build
+# ---------------------------------------------------------------------------
+# Normal build targets
+# ---------------------------------------------------------------------------
+
+# Kconfig-generated variable assignments must exist before the rest of the
+# build system is parsed.  If auto.conf is missing the user forgot to run
+# defconfig first; emit a clear error rather than silently falling back to
+# the mk/config.mk defaults (which we want to retire).
+ifdef need-config
+ifeq ($(wildcard $(KCONFIG_AUTOCONFIG)),)
+$(error .config not found - run: make PLATFORM=$(PLATFORM) defconfig)
+endif
+include $(KCONFIG_AUTOCONFIG)
+include $(KCONFIG_NOTSET_MK)
+endif
+
+# Regenerate auto.conf / autoconf.h whenever .config changes.
+# Run from $(out-dir) so that the Kconfig stamp files (include/config/<SYM>)
+# and the dep file (include/config/auto.conf.cmd) end up under $(out-dir)
+# rather than in the source tree (confdata.c uses a CWD-relative path).
+$(KCONFIG_AUTOCONFIG): $(KCONFIG_CONFIG)
+	$(q)mkdir -p $(dir $@)
+	$(q)cd $(out-dir) && $(kconfig-conf) --syncconfig $(KCONFIG_KCONFIG)
+
+# Regenerate not-set.mk whenever .config changes.  Each "# CFG_FOO is not                                                                                                                        
+# set" line in .config becomes a "CFG_FOO ?= n" assignment, making the                                                                                                                           
+# disabled symbol visible to cfg-vars-by-prefix so conf.h stays complete.                                                                                                                        
+$(KCONFIG_NOTSET_MK): $(KCONFIG_CONFIG)
+	$(q)mkdir -p $(dir $@)
+	$(q)sed -n 's/^# \($(CONFIG_)[A-Z0-9_]*\) is not set$$/\1 ?= n/p' $< > $@
+
+endif  # !config-build
+
 include core/core.mk
 
 # Platform/arch config is supposed to assign the targets
@@ -110,6 +251,9 @@ clean:
 	@if [ "$(out-dir)" != "$(O)" ]; then $(cmd-echo-silent) '  CLEAN   $(O)'; fi
 	${q}if [ -d "$(O)" ]; then $(RMDIR) $(O); fi
 	${q}rm -f compile_commands.json
+	${q}[ ! -d $(kconfig-build-dir) ] || \
+		$(MAKE) -C $(kconfig-build-dir) \
+		-f $(kconfig-src-dir)/Makefile clean
 
 .PHONY: cscope
 cscope:
