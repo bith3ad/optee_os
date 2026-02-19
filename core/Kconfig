@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# OP-TEE core configuration options — representative Kconfig subset.
+#
+# These options were previously plain ?= assignments in mk/config.mk.
+# All remaining mk/config.mk variables that have not yet been converted
+# still live there and are set after auto.conf is included.
+
+menu "Build settings"
+
+config CC_OPT_LEVEL
+	string "Compiler optimization level"
+	default "s"
+	help
+	  Compiler optimization level passed via the -O flag.
+	  "s" optimises for size (default); "0" disables optimisation
+	  (useful together with DEBUG_INFO for source-level debugging).
+
+config DEBUG_INFO
+	bool "Embed debug information"
+	default y
+	help
+	  When enabled, DWARF debug information is embedded in the core
+	  binary. Disable for the smallest possible image.
+
+endmenu # Build settings
+
+menu "Core"
+
+config TEE_CORE_DEBUG
+	bool "Enable TEE core debug features"
+	default y
+	help
+	  Enables assertions, lock checks, and more verbose panic/assert
+	  messages. Data and prefetch aborts print a full stack dump.
+	  Disable in release builds.
+
+config TEE_CORE_LOG_LEVEL
+	int "TEE core log level (0-4)"
+	default 2
+	range 0 4
+	help
+	  Controls which messages are printed on the secure console.
+	    0: none
+	    1: errors only
+	    2: errors + info (default)
+	    3: errors + info + debug
+	    4: errors + info + debug + flow
+	  Setting this to 0 also suppresses TA log output.
+
+config TEE_TA_LOG_LEVEL
+	int "TA log level (0-4)"
+	default 1
+	range 0 4
+	help
+	  Log level for Trusted Applications.  Note: if libutils.a is built
+	  with TEE_TA_LOG_LEVEL=0, TA tracing is disabled regardless of the
+	  value used here at OP-TEE build time.
+
+config TEE_CORE_TA_TRACE
+	bool "Enable TA trace output"
+	default y
+	help
+	  When enabled, TA trace messages are output according to
+	  TEE_TA_LOG_LEVEL.  When disabled they are suppressed entirely.
+
+config TEE_CORE_MALLOC_DEBUG
+	bool "TEE core malloc debug"
+	default n
+	help
+	  Enables memory-leak detection in the bget allocator.  Calling
+	  mdbg_check(1) prints all currently allocated buffers with their
+	  allocation site.  Requires a high enough log level to show output:
+	    make CFG_TEE_CORE_MALLOC_DEBUG=y CFG_TEE_CORE_LOG_LEVEL=3
+
+config TEE_TA_MALLOC_DEBUG
+	bool "TA malloc debug"
+	default n
+	help
+	  Same as TEE_CORE_MALLOC_DEBUG but for user-mode (TA) allocations.
+	    make CFG_TEE_TA_MALLOC_DEBUG=y CFG_TEE_TA_LOG_LEVEL=3
+
+config NUM_THREADS
+	int "Number of TEE threads"
+	default 2
+	help
+	  Maximum number of simultaneous threads in the secure world.
+	  Must be >= 1.  Platforms with more CPU cores typically set this
+	  higher via their defconfig.
+
+config OS_REV_REPORTS_GIT_SHA1
+	bool "Include git SHA1 in OS revision"
+	default y
+	help
+	  When enabled, OPTEE_SMC_CALL_GET_OS_REVISION returns a build
+	  identifier derived from the current git commit hash.
+
+endmenu # Core
+
+menu "Trusted Applications"
+
+config WITH_USER_TA
+	bool "User TA support"
+	default y
+	help
+	  Enable support for dynamically loaded user-mode Trusted Applications.
+	  Disabling this produces a smaller core but no TA can be loaded at
+	  run-time.
+
+config BUILD_IN_TREE_TA
+	bool "Build in-tree TAs"
+	default y
+	depends on WITH_USER_TA
+	help
+	  Build the Trusted Applications that are part of this source tree
+	  (e.g. pkcs11 TA, avb TA).  Requires WITH_USER_TA.
+
+endmenu # Trusted Applications
+
+menu "Storage"
+
+config REE_FS
+	bool "REE file system support"
+	default y
+	help
+	  Enable the Rich Execution Environment (REE) file system, where the
+	  normal world OS provides the actual storage.  This is the default
+	  back-end when TEE_STORAGE_PRIVATE is passed to the Trusted Storage
+	  API.
+
+config RPMB_FS
+	bool "RPMB file system support"
+	default n
+	help
+	  Enable the Replay Protected Memory Block (RPMB) file system.
+	  Provides hardware-backed anti-rollback protection for secure
+	  storage.
+
+endmenu # Storage
+
+menu "Paging"
+
+config WITH_PAGER
+	bool "Secure memory paging"
+	default n
+	help
+	  Enable the OP-TEE secure memory pager.  Requires SRAM backing and
+	  cannot be enabled by default.  Consult the platform documentation
+	  for memory layout requirements.
+
+config PAGED_USER_TA
+	bool "Page user TA memory"
+	default n
+	depends on WITH_PAGER && WITH_USER_TA
+	help
+	  Use the pager to page-in/page-out user TA memory.  Requires both
+	  WITH_PAGER and WITH_USER_TA.
+
+endmenu # Paging
