@@ -370,7 +370,19 @@ jobs:
           export CROSS_COMPILE64="ccache aarch64-linux-gnu-"
 
 
-          function _make() { make -j$(nproc) -s O=out $*; }
+          _last_defconfig_platform=""
+          function _make() {
+            local plat="vexpress-qemu_virt"   # matches top-level Makefile default
+            for arg in "$@"; do
+              case "$arg" in PLATFORM=*) plat="${arg#PLATFORM=}" ;; esac
+            done
+            # defconfig is cheap (text-only); re-run whenever the platform changes
+            if [ "$plat" != "$_last_defconfig_platform" ]; then
+              make -j1 -s O=out PLATFORM="$plat" defconfig
+              _last_defconfig_platform="$plat"
+            fi
+            make -j$(nproc) -s O=out "$@"
+          }
 
           ccache -s -v
           eval "$MAKE_COMMANDS"
@@ -391,7 +403,7 @@ jobs:
           set -e
 
           testdir="tests/config-header-test"
-          reference_confh_dir="$testdir/config-header-references"
+          reference_confh_dir="$testdir/config-artifacts-ref"
           outdir="ci-confh-test"
 
           # Generate the conf.h and compare them against the current reference
