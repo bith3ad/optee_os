@@ -10,7 +10,7 @@
 /* CFG_BOOT_SYNC_CPU is not set */
 #define CFG_BUILD_IN_TREE_TA 1
 /* CFG_CALLOUT is not set */
-#define CFG_CC_OPT_LEVEL s
+#define CFG_CC_OPT_LEVEL "s"
 #define CFG_COMPAT_GP10_DES 1
 #define CFG_CONSOLE_RUNTIME_LOG_LEVEL 0
 /* CFG_CONSOLE_RUNTIME_SET is not set */
