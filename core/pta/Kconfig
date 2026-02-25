@@ -1,0 +1,12 @@
+menu "Pseudo TAs"
+
+config ATTESTATION_PTA
+	bool "Attestation pseudo TA"
+	default n
+	depends on REE_FS || RPMB_FS
+	help
+	  Enable the pseudo TA that provides an interface to request
+	  measurements of a TA or the TEE binary.  Requires at least one
+	  secure storage back-end (REE FS or RPMB FS).
+
+endmenu # Pseudo TAs

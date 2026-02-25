@@ -12,3 +12,5 @@
 mainmenu "OP-TEE OS/$(ARCH) $(PLATFORM) Configuration"
 
 source "core/Kconfig"
+
+source "core/pta/Kconfig"
