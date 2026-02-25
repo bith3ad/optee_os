@@ -206,7 +206,6 @@
 #define CFG_REE_FS 1
 /* CFG_REE_FS_ALLOW_RESET is not set */
 #define CFG_REE_FS_HTREE_HASH_SIZE_COMPAT 1
-/* CFG_REE_FS_INTEGRITY_RPMB is not set */
 #define CFG_REE_FS_TA 1
 /* CFG_REE_FS_TA_BUFFERED is not set */
 /* CFG_REGULATOR_FIXED is not set */
@@ -214,15 +213,7 @@
 /* CFG_REMOTEPROC_PTA is not set */
 #define CFG_REMOTEPROC_TA_HEAP_SIZE (4 * 1024)
 #define CFG_RESERVED_VASPACE_SIZE (1024 * 1024 * 10)
-#define CFG_RPMB_ANNOUNCE_PROBE_CAP 1
 /* CFG_RPMB_FS is not set */
-#define CFG_RPMB_FS_CACHE_ENTRIES 0
-/* CFG_RPMB_FS_DEBUG_DATA is not set */
-#define CFG_RPMB_FS_DEV_ID 0
-#define CFG_RPMB_FS_RD_ENTRIES 8
-/* CFG_RPMB_RESET_FAT is not set */
-/* CFG_RPMB_TESTKEY is not set */
-/* CFG_RPMB_WRITE_KEY is not set */
 /* CFG_RSA_PUB_EXPONENT_3 is not set */
 /* CFG_RTC_PTA is not set */
 /* CFG_SCMI_MSG_DRIVERS is not set */
